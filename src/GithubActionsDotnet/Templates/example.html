@@ -4,20 +4,54 @@
 <head>
     <meta charset="utf-8" />
     <title>SAST for /name/test</title>
+    <link href="example-style.css" rel="stylesheet" />
 </head>
 <body>
-    <h1>Scan run at: 2022-12-12 31:12:12 - [/repo/name/test] - latest checking commit - []</h1>
-    <h2>Scan results: <span>Warning</span></h2>
+<section role="repository-info" class="repository-info__warning">
+    <div class="wrapper repository-info__content">
+        <div class="repository">/repo/name/test</div>
+        <div class="label">Repository</div>
+        <div class="scan-date">2022-12-12 31:12:12</div>
     
-    <table>
-        <thead>
-            <tr>
-                <th>Level</th>
-                <th>Number of alerts</th>
-                <th>Rule</th>
-                <th>Message</th>
-            </tr>
-        </thead>
-    </table>
+        <footer>
+            <ul>
+                <li>Errors <span class="alert-number alert-errors">12</span></li>
+                <li>Warnings <span class="alert-number alert-warnings">12</span></li>
+                <li>Notes <span class="alert-number alert-notes">12</span></li>
+            </ul>
+        </footer>
+    </div>
+</section>
+
+<div class="wrapper">
+    <div class="alerts"> 
+        <div class="alert warning">
+            <h1>
+                <span>Generic catch clause.</span>
+                <span>2023-05-01T05:09:06Z</span>
+            </h1>
+            <div class="location">SastTesting/Function1.cs</div>
+            <div class="branch">refs/heads/master (<span class="commit_sha">13620bd2140d6640b368f91ced881b64a40e3ae7</span>)</div>
+
+            <div class="code">
+                <div aria-codeline="74">catch (Exception ex)</div>
+                <div aria-codeline="75">{</div>
+                    <div aria-codeline="76">log.LogError(ex, "Error getting user by id");</div>
+                    <div aria-codeline="77">return new StatusCodeResult(StatusCodes.Status500InternalServerError);</div>
+                <div aria-codeline="78">}    </div>
+            </div>
+            <div class="tags">
+                Tags
+                <ul>
+                    <li>efficiency</li>                    
+                    <li>external/cwe/cwe-404</li>
+                    <li>external/cwe/cwe-459</li>
+                    <li>external/cwe/cwe-460</li>
+                    <li>maintainability</li>
+                </ul>
+            </div>
+        </div> 
+    </section> 
+</div>
 </body>
 </html>
