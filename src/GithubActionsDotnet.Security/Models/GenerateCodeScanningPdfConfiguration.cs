@@ -30,4 +30,9 @@ public class GenerateCodeScanningPdfConfiguration: BaseActionConfig
     [Option(Required = false,
         HelpText = "Branch name i.e. refs/heads/master")]
     public string Branch { get; set; }
+
+    [Option(Required = false,
+        Default = "document.pdf",
+        HelpText = "File name. Default document.pdf")]
+    public string FileName { get; set; }
 }

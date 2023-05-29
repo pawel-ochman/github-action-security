@@ -8,10 +8,115 @@
 <body>
     Repository scan: {{repository}}<br />
     Date {{date}}<br />
-    Number of issues {{result.size}}
+    Number of issues {{code_scan_alerts.size}}
+    <!-- https://docs.gitlab.com/ee/user/application_security/vulnerability_report/ -->
+    <h1>Code scanning results</h1>
+    <table>
+        <tr>
+            <td>Critical</td>
+            <td>High</td>
+            <td>Error</td>
+            <td>Warning</td>
+            <td>Medium</td>
+            <td>Low</td>
+            <td>Note</td>
+        </tr>
+        <tr>
+            <td>{{ issues_stats.critical }}</td>
+            <td>{{ issues_stats.high }}</td>
+            <td>{{ issues_stats.error }}</td>
+            <td>{{ issues_stats.warning }}</td>
+            <td>{{ issues_stats.medium }}</td>
+            <td>{{ issues_stats.note }}</td>
+        </tr>
+    </table>
 
-    {{~ for item in errorlevels ~}}
-    Issue level {{item.key}}: {{item.value.size}}<br />
-    {{~ end ~}}
+    <table>
+        <tr>
+            <td>Detected</td>
+            <td>Status</td>
+            <td>Severity</td>
+            <td>Description</td>
+            <td>Identifier</td>
+        </tr>
+        {{~ for item in issues.critical ~}}
+        <tr>
+            <td>{{ item.created_at }}</td>
+            <td>{{ item.state }}</td>
+            <td>{{ item.rule.severity }}</td>
+            <td>{{ item.rule.description }}</td>
+            <td>
+                {{~ for tag in item.rule.tags ~}}
+                {{ tag }}<br />
+                {{~ end ~}}
+            </td>
+        </tr>
+        {{~ end ~}}
+        {{~ for item in issues.high ~}}
+        <tr>
+            <td>{{ item.created_at }}</td>
+            <td>{{ item.state }}</td>
+            <td>{{ item.rule.severity }}</td>
+            <td>{{ item.rule.description }}</td>
+            <td>
+                {{~ for tag in item.rule.tags ~}}
+                {{ tag }}<br />
+                {{~ end ~}}
+            </td>
+        </tr>
+        {{~ end ~}}
+        {{~ for item in issues.error ~}}
+        <tr>
+            <td>{{ item.created_at }}</td>
+            <td>{{ item.state }}</td>
+            <td>{{ item.rule.severity }}</td>
+            <td>{{ item.rule.description }}</td>
+            <td>
+                {{~ for tag in item.rule.tags ~}}
+                {{ tag }}<br />
+                {{~ end ~}}
+            </td>
+        </tr>
+        {{~ end ~}}
+        {{~ for item in issues.warning ~}}
+        <tr>
+            <td>{{ item.created_at }}</td>
+            <td>{{ item.state }}</td>
+            <td>{{ item.rule.severity }}</td>
+            <td>{{ item.rule.description }}</td>
+            <td>
+                {{~ for tag in item.rule.tags ~}}
+                {{ tag }}<br />
+                {{~ end ~}}
+            </td>
+        </tr>
+        {{~ end ~}}
+        {{~ for item in issues.medium ~}}
+        <tr>
+            <td>{{ item.created_at }}</td>
+            <td>{{ item.state }}</td>
+            <td>{{ item.rule.severity }}</td>
+            <td>{{ item.rule.description }}</td>
+            <td>
+                {{~ for tag in item.rule.tags ~}}
+                {{ tag }}<br />
+                {{~ end ~}}
+            </td>
+        </tr>
+        {{~ end ~}}
+        {{~ for item in issues.note ~}}
+        <tr>
+            <td>{{ item.created_at }}</td>
+            <td>{{ item.state }}</td>
+            <td>{{ item.rule.severity }}</td>
+            <td>{{ item.rule.description }}</td>
+            <td>
+                {{~ for tag in item.rule.tags ~}}
+                {{ tag }}<br />
+                {{~ end ~}}
+            </td>
+        </tr>
+        {{~ end ~}}
+    </table>
 </body>
 </html>

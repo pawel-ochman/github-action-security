@@ -21,7 +21,7 @@ var debug = new string[]
     "--outputfolder",
     "c:\\temp",
     "--templateurl",
-    "C:\\Projects\\github-actions-dotnet\\GithubActionsDotnet\\src\\GithubActionsDotnet\\Templates\\default.html"
+    "C:\\Projects\\github-action-security\\src\\GithubActionsDotnet\\Templates\\default.html"
 };
 
 var initArguments = Default.ParseArguments<BaseActionConfig>(args);

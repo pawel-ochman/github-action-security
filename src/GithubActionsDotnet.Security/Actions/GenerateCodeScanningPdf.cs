@@ -1,29 +1,27 @@
-﻿using System.ComponentModel;
-using System.Data.Common;
-using System.Net.Http.Headers;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using GithubActionsDotnet.Common.Actions;
-using GithubActionsDotnet.Common.Constants;
+﻿using GithubActionsDotnet.Common.Actions;
+using GithubActionsDotnet.Common.Models.GitHub;
 using GithubActionsDotnet.Common.Service;
 using GithubActionsDotnet.Security.Models;
+using GithubActionsDotnet.Security.Services;
 using iText.Html2pdf;
-using iText.Kernel.Events;
-using iText.Kernel.Pdf; 
+using iText.Kernel.Pdf;
+using OneOf.Types;
 using Scriban;
 using Scriban.Runtime;
+using System.Text;
 
 namespace GithubActionsDotnet.Security.Actions;
 
-
 public class GenerateCodeScanningPdfBuilder : IActionBuilder
 {
-    private readonly IHttpClientFactory _factory;
+    private readonly IGithubClient _client;
+    private readonly IPdfGeneration _pdfGeneration;
 
-    public GenerateCodeScanningPdfBuilder(IHttpClientFactory factory)
+    public GenerateCodeScanningPdfBuilder(IGithubClient client,
+        IPdfGeneration pdfGeneration)
     {
-        _factory = factory;
+        _client = client;
+        _pdfGeneration = pdfGeneration;
     }
 
     public bool Support(string verb) => verb == "generate-code-scanning-pdf";
@@ -43,161 +41,191 @@ public class GenerateCodeScanningPdfBuilder : IActionBuilder
             return new HelpActionCommand(new List<IActionBuilder> { this });
         }
         
-        return new GenerateCodeScanningPdf(t.Value, _factory);
+        return new GenerateCodeScanningPdf(t.Value, 
+            _client, 
+            _pdfGeneration);
     }
 }
 
 public class GenerateCodeScanningPdf : IActionCommand
 {
     private readonly GenerateCodeScanningPdfConfiguration _configuration;
-    private readonly IHttpClientFactory _clientFactory;
+    private readonly IGithubClient _client;
+    private readonly IPdfGeneration _pdfGeneration;
 
     public GenerateCodeScanningPdf(GenerateCodeScanningPdfConfiguration configuration,
-        IHttpClientFactory clientFactory)
+        IGithubClient client,
+        IPdfGeneration pdfGeneration)
     {
         _configuration = configuration;
-        _clientFactory = clientFactory;
+        _client = client;
+        _pdfGeneration = pdfGeneration;
     }
 
     public async Task RunAsync(IActionLogger logger)
-    {
-        //var alerts = await GetRecentAlertsAsync(logger);
-        //File.WriteAllText("C:\\temp\\alerts.json", JsonSerializer.Serialize(alerts));
-
-        var alerts = JsonSerializer.Deserialize<CodeScanAlerts[]>(File.ReadAllText("C:\\temp\\alerts.json"))!;
-
-        var template = File.ReadAllText(_configuration.TemplateUrl);
-
-        var t = ScriptObject.IsImportable(alerts[0]);
-        var obs = alerts.Select(x => ScriptObject.From(x)).ToArray();
-        var content = Template.Parse(template);
-
-        var errorLevels = alerts.GroupBy(x => x.Rule.Severity)
-            .OrderBy(x => x.Key).ToDictionary(x=>x.Key, x =>x.ToArray());
-        var os = ScriptObject.From(errorLevels);
-
-        var payload = new
+    {  
+        var payload = new TemplatePayload
         {
-            Result = obs,
             Date = DateTime.UtcNow.ToString("D"),
             Repository = _configuration.RepositoryUrl,
-            ErrorLevels = os,
         };
-        var result = content.Render(payload);
 
-        ConverterProperties properties = new ConverterProperties();
+        await Task.WhenAll(
+            PullCodeScanInformation(payload, logger),
+            PullDependencyInformation(payload, logger));
 
-        PdfWriter writer = new PdfWriter($"{_configuration.OutputFolder}/document.pdf");
+        var template = await File.ReadAllTextAsync(_configuration.TemplateUrl);
+        var content = Template.Parse(template);
+        var result = await content.RenderAsync(payload);
 
-        PdfDocument pdf = new PdfDocument(writer);
-
-        properties.SetBaseUri("https://google.com");
-        
-        HtmlConverter.ConvertToPdf(new MemoryStream(Encoding.UTF8.GetBytes(result)), pdf, properties);
+        _pdfGeneration.GeneratePdfFromHtml(result, $"{_configuration.OutputFolder}/{_configuration.FileName}");
     }
 
-    private async Task<CodeScanAlerts[]> GetRecentAlertsAsync(IActionLogger logger)
+    private async Task PullDependencyInformation(TemplatePayload payload, IActionLogger logger)
+    { 
+        var dependencies = await _client.GetDependenciesAlerts(
+            _configuration.RepositoryUrl,
+            _configuration.GithubToken);
+
+        dependencies.Switch(
+            err =>
+            {
+                payload.DependenciesStats = ScriptObject.From(new AlertsSummary<int>());
+                payload.Dependencies = ScriptObject.From(new AlertsSummary<DependencyResult[]>
+                {
+                    Critical = Array.Empty<DependencyResult>(),
+                    Error = Array.Empty<DependencyResult>(),
+                    High = Array.Empty<DependencyResult>(),
+                    Low = Array.Empty<DependencyResult>(),
+                    Medium = Array.Empty<DependencyResult>(),
+                    Warning = Array.Empty<DependencyResult>(),
+                    Note = Array.Empty<DependencyResult>(),
+                });
+                payload.DependenciesAlerts = Array.Empty<ScriptObject>();
+                logger.Warning($"Can't pull dependencies data: {err.Message}");
+            },
+            result =>
+            {
+                payload.DependenciesAlerts = result.Select(ScriptObject.From).ToArray();
+
+                var errorLevels = result
+                    .GroupBy(x => x.SecurityAdvisory.Severity)
+                    .OrderBy(x => x.Key)
+                    .ToDictionary(x => x.Key, x => x.ToArray());
+
+                payload.DependenciesStats = ScriptObject.From(new AlertsSummary<int>
+                {
+                    Critical = errorLevels.TryGetValue(Severity.Critical, array => array.Length, () => 0),
+                    Error = errorLevels.TryGetValue(Severity.Error, array => array.Length, () => 0),
+                    High = errorLevels.TryGetValue(Severity.High, array => array.Length, () => 0),
+                    Low = errorLevels.TryGetValue(Severity.Low, array => array.Length, () => 0),
+                    Medium = errorLevels.TryGetValue(Severity.Medium, array => array.Length, () => 0),
+                    Warning = errorLevels.TryGetValue(Severity.Warning, array => array.Length, () => 0),
+                    Note = errorLevels.TryGetValue(Severity.Note, array => array.Length, () => 0),
+                });
+                payload.Dependencies = ScriptObject.From(new AlertsSummary<DependencyResult[]>
+                {
+                    Critical = errorLevels.TryGetValue(Severity.Critical, array => array, Array.Empty<DependencyResult>),
+                    Error = errorLevels.TryGetValue(Severity.Error, array => array, Array.Empty<DependencyResult>),
+                    High = errorLevels.TryGetValue(Severity.High, array => array, Array.Empty<DependencyResult>),
+                    Low = errorLevels.TryGetValue(Severity.Low, array => array, Array.Empty<DependencyResult>),
+                    Medium = errorLevels.TryGetValue(Severity.Medium, array => array, Array.Empty<DependencyResult>),
+                    Warning = errorLevels.TryGetValue(Severity.Warning, array => array, Array.Empty<DependencyResult>),
+                    Note = errorLevels.TryGetValue(Severity.Note, array => array, Array.Empty<DependencyResult>),
+                });
+            });
+    }
+
+    private async Task PullCodeScanInformation(TemplatePayload payload, IActionLogger logger)
     {
-        try
-        {
-            using var client = _clientFactory.CreateClient(ActionConstants.GithubApiClientName);
+        var codeScanningAlerts = await _client.GetRecentAlertsAsync(
+            _configuration.RepositoryUrl,
+            _configuration.GithubToken);
 
+        codeScanningAlerts.Switch(
+            err =>
+            {
+                payload.IssuesStats = ScriptObject.From(new AlertsSummary<int>());
+                payload.Issues = ScriptObject.From(new AlertsSummary<CodeScanAlerts[]>
+                {
+                    Critical = Array.Empty<CodeScanAlerts>(),
+                    Error = Array.Empty<CodeScanAlerts>(),
+                    High = Array.Empty<CodeScanAlerts>(),
+                    Low = Array.Empty<CodeScanAlerts>(),
+                    Medium = Array.Empty<CodeScanAlerts>(),
+                    Warning = Array.Empty<CodeScanAlerts>(),
+                    Note = Array.Empty<CodeScanAlerts>(),
+                });
+                payload.CodeScanAlerts = Array.Empty<ScriptObject>();
+                logger.Warning($"Can't pull code scan data: {err.Message}");
+            },
+            result =>
+            {
+                payload.CodeScanAlerts = result.Select(ScriptObject.From).ToArray();
 
-            var request = new HttpRequestMessage(HttpMethod.Get, $"{_configuration.RepositoryUrl}/code-scanning/alerts");
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _configuration.GithubToken);
-            request.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+                var errorLevels = result
+                    .GroupBy(x => x.Rule.Severity)
+                    .OrderBy(x => x.Key)
+                    .ToDictionary(x => x.Key, x => x.ToArray());
 
-            var response = await client.SendAsync(request);
+                payload.IssuesStats = ScriptObject.From(new AlertsSummary<int>
+                {
+                    Critical = errorLevels.TryGetValue(Severity.Critical, array => array.Length, () => 0),
+                    Error = errorLevels.TryGetValue(Severity.Error, array => array.Length, () => 0),
+                    High = errorLevels.TryGetValue(Severity.High, array => array.Length, () => 0),
+                    Low = errorLevels.TryGetValue(Severity.Low, array => array.Length, () => 0),
+                    Medium = errorLevels.TryGetValue(Severity.Medium, array => array.Length, () => 0),
+                    Warning = errorLevels.TryGetValue(Severity.Warning, array => array.Length, () => 0),
+                    Note = errorLevels.TryGetValue(Severity.Note, array => array.Length, () => 0),
+                });
+                payload.Issues = ScriptObject.From(new AlertsSummary<CodeScanAlerts[]>
+                {
+                    Critical = errorLevels.TryGetValue(Severity.Critical, array => array, Array.Empty<CodeScanAlerts>),
+                    Error = errorLevels.TryGetValue(Severity.Error, array => array, Array.Empty<CodeScanAlerts>),
+                    High = errorLevels.TryGetValue(Severity.High, array => array, Array.Empty<CodeScanAlerts>),
+                    Low = errorLevels.TryGetValue(Severity.Low, array => array, Array.Empty<CodeScanAlerts>),
+                    Medium = errorLevels.TryGetValue(Severity.Medium, array => array, Array.Empty<CodeScanAlerts>),
+                    Warning = errorLevels.TryGetValue(Severity.Warning, array => array, Array.Empty<CodeScanAlerts>),
+                    Note = errorLevels.TryGetValue(Severity.Note, array => array, Array.Empty<CodeScanAlerts>),
+                });
+            });
+    }
+     
+    public class AlertsSummary<TItem>
+    {
+        public TItem? Critical { get; set; }
+        public TItem? Error { get; set; }
+        public TItem? High { get; set; }
+        public TItem? Low { get; set; }
+        public TItem? Medium { get; set; }
+        public TItem? Warning { get; set; }
+        public TItem? Note { get; set; }
+    }
 
-            response.EnsureSuccessStatusCode();
+    public class TemplatePayload 
+    {
+        public ScriptObject[]? CodeScanAlerts { get; set; }
+        public ScriptObject[]? DependenciesAlerts { get; set; }
+        public string? Date { get; set; }
+        public string? Repository { get; set; }
+        public ScriptObject? IssuesStats { get; set; }
+        public ScriptObject? Issues { get; set; }
+        public ScriptObject? DependenciesStats { get; set; }
+        public ScriptObject? Dependencies { get; set; }
+    }
+}
 
-            var content = await response.Content.ReadAsStringAsync();
-            var data = JsonSerializer.Deserialize<CodeScanAlerts[]>(content)!;
-            return data;
-        }
-        catch (Exception e)
-        {
-            logger.Error(e.Message);
-            throw;
-        }
+public static class Extensions
+{
+    public static TResult TryGetValue<TKey,TValue, TResult>(this Dictionary<TKey, TValue> al, 
+        TKey key,
+        Func<TValue, TResult> whenExist,
+        Func<TResult> whenNotExist) where TKey : notnull
+    {
+        return al.TryGetValue(key, out var t) ? whenExist(t) : whenNotExist();
     }
 }
 
 
-public record DismissedBy(
-        [property: JsonPropertyName("login")] string Login,
-        [property: JsonPropertyName("id")] int? Id,
-        [property: JsonPropertyName("node_id")] string NodeId,
-        [property: JsonPropertyName("avatar_url")] string AvatarUrl,
-        [property: JsonPropertyName("gravatar_id")] string GravatarId,
-        [property: JsonPropertyName("url")] string Url,
-        [property: JsonPropertyName("html_url")] string HtmlUrl,
-        [property: JsonPropertyName("followers_url")] string FollowersUrl,
-        [property: JsonPropertyName("following_url")] string FollowingUrl,
-        [property: JsonPropertyName("gists_url")] string GistsUrl,
-        [property: JsonPropertyName("starred_url")] string StarredUrl,
-        [property: JsonPropertyName("subscriptions_url")] string SubscriptionsUrl,
-        [property: JsonPropertyName("organizations_url")] string OrganizationsUrl,
-        [property: JsonPropertyName("repos_url")] string ReposUrl,
-        [property: JsonPropertyName("events_url")] string EventsUrl,
-        [property: JsonPropertyName("received_events_url")] string ReceivedEventsUrl,
-        [property: JsonPropertyName("type")] string Type,
-        [property: JsonPropertyName("site_admin")] bool? SiteAdmin
-);
 
-public record Location(
-        [property: JsonPropertyName("path")] string Path,
-        [property: JsonPropertyName("start_line")] int? StartLine,
-        [property: JsonPropertyName("end_line")] int? EndLine,
-        [property: JsonPropertyName("start_column")] int? StartColumn,
-        [property: JsonPropertyName("end_column")] int? EndColumn
-);
-
-public record Message(
-        [property: JsonPropertyName("text")] string Text
-);
-
-public record MostRecentInstance(
-        [property: JsonPropertyName("ref")] string Ref,
-        [property: JsonPropertyName("analysis_key")] string AnalysisKey,
-        [property: JsonPropertyName("category")] string Category,
-        [property: JsonPropertyName("environment")] string Environment,
-        [property: JsonPropertyName("state")] string State,
-        [property: JsonPropertyName("commit_sha")] string CommitSha,
-        [property: JsonPropertyName("message")] Message Message,
-        [property: JsonPropertyName("location")] Location Location,
-        [property: JsonPropertyName("classifications")] IReadOnlyList<string> Classifications
-);
-
-public record CodeScanAlerts( 
-        [property: JsonPropertyName("number")] int? Number, 
-        [property: JsonPropertyName("created_at")] DateTime? CreatedAt,
-        [property: JsonPropertyName("url")] string Url,
-        [property: JsonPropertyName("html_url")] string HtmlUrl,
-        [property: JsonPropertyName("state")] string State,
-        [property: JsonPropertyName("fixed_at")] string FixedAt,
-        [property: JsonPropertyName("dismissed_by")] DismissedBy DismissedBy,
-        [property: JsonPropertyName("dismissed_at")] DateTime? DismissedAt,
-        [property: JsonPropertyName("dismissed_reason")] string DismissedReason,
-        [property: JsonPropertyName("dismissed_comment")] string DismissedComment,
-        [property: JsonPropertyName("rule")] Rule Rule,
-        [property: JsonPropertyName("tool")] Tool Tool,
-        [property: JsonPropertyName("most_recent_instance")] MostRecentInstance MostRecentInstance,
-        [property: JsonPropertyName("instances_url")] string InstancesUrl
-);
-
-public record Rule( 
-        [property: JsonPropertyName("id")] string Id, 
-        [property: JsonPropertyName("severity")] string Severity, 
-        [property: JsonPropertyName("tags")] IReadOnlyList<string> Tags, 
-        [property: JsonPropertyName("description")] string Description, 
-        [property: JsonPropertyName("name")] string Name
-);
-
-public record Tool( 
-        [property: JsonPropertyName("name")] string Name, 
-        [property: JsonPropertyName("guid")] object Guid, 
-        [property: JsonPropertyName("version")] string Version
-);
 

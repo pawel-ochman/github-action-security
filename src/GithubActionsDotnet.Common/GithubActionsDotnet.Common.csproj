@@ -8,8 +8,8 @@
 
   <ItemGroup>
     <Folder Include="Actions\" />
-    <Folder Include="Models\" />
     <Folder Include="Constants\" />
+    <Folder Include="Models\GitHub\" />
     <Folder Include="Service\" />
   </ItemGroup>
 
@@ -17,6 +17,9 @@
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="7.0.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="7.0.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+    <PackageReference Include="OneOf" Version="3.0.243" />
+    <PackageReference Include="System.Text.Json" Version="7.0.0" />
   </ItemGroup>
 
 </Project>

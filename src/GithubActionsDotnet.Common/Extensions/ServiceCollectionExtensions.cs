@@ -11,7 +11,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<IActionLogger, ActionLogger>();
         services.AddSingleton<IActionResolver, ActionResolver>();
-        services.AddHttpClient(ActionConstants.GithubApiClientName, client =>
+        services.AddHttpClient<IGithubClient, GithubClient>(client =>
         {
             client.BaseAddress = new Uri(config.BaseAddress);
             client.DefaultRequestHeaders.UserAgent.TryParseAdd("request");
