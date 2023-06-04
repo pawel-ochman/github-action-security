@@ -1,160 +1,60 @@
-body, html, div, ul, h1 {
-    margin: 0;
-    padding: 0;
-    border: 0; 
-    font-family:'Arial';
-    vertical-align: baseline;
-    box-sizing: border-box;
-}
-
 body {
-    font-size: 12px;
-    --repository-primary-color: #f5f5f5;
-
-    margin-left: auto;
-    margin-right: auto;
+    font-family: Arial;
 }
 
-.wrapper {
-    max-width: 800px;
-    margin-left: auto;
-    margin-right: auto; 
+tr td{ 
+    vertical-align: top;
 }
 
-section[role="repository-info"] {
-    position: relative;
-    border-bottom: 1px solid #e5e5e5;
-
-    font-size: 1.5em;
-    background-color: var(--repository-primary-color);
-    margin-bottom: 1em; 
-} 
-
-section[role="repository-info"] .repository {
-    top: 0;
-    font-weight: bold;
-    font-size: 1.5em;
+thead tr td, tbody tr td {
+    padding: 0.3em;
+    text-align: center;
 }
 
-section[role="repository-info"] .repository-info__content {
-    position: inherit;
-    height: 100px;
+thead .crt {
+    background: rgb(152, 18, 18);
+    color: white;
 }
 
-section[role="repository-info"] .label {
-    font-size: 0.8em;
-    text-transform: lowercase;
-    color: gray;
+tbody .crt {
+    color: rgb(152, 18, 18);
 }
 
-section[role="repository-info"] .scan-date {
-    position: absolute;
-    right: 1em;
-    top: 0em;
-    font-size: 1rem;
-    font-weight: bold;
+thead .hgh {
+    background: red;
+    color: white;
 }
 
-section[role="repository-info"] footer {
-    position: absolute;
-    bottom: 0;
-    width: 100%;
-}
-
-section[role="repository-info"] footer ul {
-    display: flex;
-    float: right;
-    font-size: 0.9rem;
-}
-section[role="repository-info"] footer ul li {
-    display: inline-block;
-    margin-right: 1em;
-    font-weight: bold;
-    padding: 1em;
-    font-size: 0.8em
-}
-
-section[role="repository-info"] footer ul li span {
-    display: inline-block;
-    background: white;
-    border: 1px solid gray;
-    padding: 0.2em 0.7em;
-    border-radius: 5px;
-}
-
-.alert-notes {
-    color: gray;
-}
-.alert-warnings {
-    color: rgb(190, 190, 0);
-}
-.alert-errors {
+tbody .hgh {
     color: red;
 }
 
-div[class="alerts"] {
-
-}
-
-.alert {
-    display: grid;
-    grid-template-areas: 
-        "hdr hdr hdr"
-        "loc loc brc"
-        "code code info";
-}
-
-.alert h1 {
-    background-color: gray;
+thead .err {
+    background: rgb(248, 107, 107);
     color: white;
-    font-size: 1rem;
-    padding: 0.2rem;
-    grid-area: hdr;
-
-    display: flex;
-    justify-items: flex-end;
-    justify-content: space-between;
 }
 
-.alert .location {
-    font-size: 0.8rem;
-    padding: 0.2rem;
-    color: gray;
-    grid-area: loc;
+tbody .err {
+    color: rgb(248, 107, 107);
 }
 
-.alert .branch {
-    font-size: 0.8rem;
-    padding: 0.2rem;
-    color: gray;
-    grid-area: brc;
-}
+thead .war {
+    background: yellow; 
+}  
 
-.alert .branch {
-    font-size: 0.8rem;
-    padding: 0.2rem;
-    color: gray;
-    grid-area: brc;
-}
+thead .med, tbody .med {
+    color: rgb(200, 200, 83); 
+}  
 
-.alert .tags {
-    font-size: 0.8rem;
-    padding: 0.2rem; 
-    grid-area: info;
-    text-align: right;
-    font-weight: bold; 
-}
+thead .low {
+    background: rgb(172, 172, 172);  
+} 
 
-.alert .tags ul li {
-    list-style: none;
-    text-align: right;
-    font-weight: normal;
-    color: gray;
-}
+tbody .low {
+    color: rgb(172, 172, 172);  
+} 
 
-.alert .code {
-    font-size: 0.8rem;
-    padding: 1rem;
-    color: gray;
-    grid-area: code;
+.code-scanning-details thead tr td{
+    text-align: center;
+    font-weight: bold;
 }
